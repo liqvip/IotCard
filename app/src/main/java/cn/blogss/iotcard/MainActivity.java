@@ -23,6 +23,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -32,6 +33,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.charset.StandardCharsets;
+
+import android_serialport_api.SerialPortManager;
 
 /**
  * 待解决问题
@@ -43,9 +47,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private static final String TAG = "MainActivity";
     public static final String ACTION_SIM_STATE_CHANGED = "android.intent.action.SIM_STATE_CHANGED";
     private LocationManager locationManager;
+    private SerialPortManager serialPortManager;
     private final SimStateReceive simStateReceive = new SimStateReceive();
     private EditText etCmd;
     private Button btSend;
+    private TextView tvRes;
 
     private final PhoneStateListener phoneStateListener = new PhoneStateListener(){
         @Override
@@ -89,11 +95,25 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
 //        getLocationByGps();
 //        getLocationByGpsContinuous();
-        rootCommand("");
-        registerReceiver(simStateReceive, new IntentFilter(ACTION_SIM_STATE_CHANGED));
         etCmd = findViewById(R.id.et_cmd);
         btSend = findViewById(R.id.bt_send);
+        tvRes = findViewById(R.id.tv_res);
         btSend.setOnClickListener(this);
+
+        serialPortManager = new SerialPortManager.Builder()
+                .path("/dev/ttyUSB1")
+                .baudrate(115200)
+                .flags(0)
+                .openListener(opened -> {
+                    Log.i(TAG, "opened: " + opened);
+                })
+                .dataReceiveListener(data -> {
+                    String res = new String(data, StandardCharsets.UTF_8);
+                    tvRes.setText("收到的响应：" + res);
+                })
+                .build();
+
+        registerReceiver(simStateReceive, new IntentFilter(ACTION_SIM_STATE_CHANGED));
     }
 
     private  void updateToNewLocation(Location location) {
@@ -178,11 +198,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public void onClick(View v) {
         int id = v.getId();
         if(id == R.id.bt_send){
-            String cmd = etCmd.getText().toString();
-            if(!TextUtils.isEmpty(cmd)){
-                sendAtCmd(cmd);
-                receiveAtResponse();
-            }
+            String cmd = etCmd.getText().toString() + "\r";
+            serialPortManager.sendString(cmd);
         }
     }
 
@@ -222,6 +239,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         // 获取iccid
                         String iccid = getIccid(telephonyManager);
                         Log.i(TAG, "iccid: " + iccid);
+                        // 连接串口
+                        serialPortManager.open();
 
                         break;
                     case TelephonyManager.SIM_STATE_PIN_REQUIRED:
@@ -256,109 +275,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         return TextUtils.isEmpty(telephonyManager.getSimSerialNumber()) ? iccid : telephonyManager.getSimSerialNumber();
     }
 
-
-    private RandomAccessFile localRandomAccessFile;
-    private RandomAccessFile localRandomAccessFileReceive;
-    private final Handler handler = new Handler(Looper.getMainLooper()){
-        @Override
-        public void handleMessage(@NonNull Message msg) {
-            if(msg.what == 0){
-                Log.i(TAG, "handleMessage: " + msg.obj);
-            }
-        }
-    };
-    void sendAtCmd(String cmd) {
-        char endChar = 26;
-        char symbol1 = 13;
-        try {
-            if (localRandomAccessFile == null) {
-                localRandomAccessFile = new RandomAccessFile("/dev/ttyUSB1", "rw");
-            }
-            if (cmd.contains("0X1A")) {
-                String data = cmd.replace("0X1A", "");
-                String endCmd = data + endChar + symbol1;
-                localRandomAccessFile.writeBytes(endCmd + "\r\n");
-            } else {
-                localRandomAccessFile.writeBytes(cmd + "\r\n");
-            }
-
-            Message.obtain(handler, 0, cmd + " 命令已发送到/dev/ttyUSB1").sendToTarget();
-        } catch (Exception e) {
-            Message.obtain(handler, 0, "/dev/ttyUSB1 发送出现错误:" + e.getMessage()).sendToTarget();
-        } finally {
-            try {
-                if (localRandomAccessFile != null)
-                    localRandomAccessFile.close();
-                localRandomAccessFile = null;
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    void receiveAtResponse() {
-        try {
-            if (localRandomAccessFileReceive == null) {
-                localRandomAccessFileReceive = new RandomAccessFile("/dev/ttyUSB1", "r");
-            }
-
-            byte[] arrayOfByte = new byte[1024];
-            int readSize = 0;
-            while ((readSize = localRandomAccessFileReceive.read(arrayOfByte)) == -1) {
-
-            }
-            String str = new String(arrayOfByte).substring(0, readSize);
-            Log.e("str", str);
-            Message.obtain(handler, 0, "从/dev/ttyUSB1收到:" + str).sendToTarget();
-        } catch (Exception e) {
-            e.printStackTrace();
-            Message.obtain(handler, 0, "/dev/ttyUSB1 获取出现错误:" + e.getMessage()).sendToTarget();
-        }
-    }
-
-    /**
-     * 获取 root 权限
-     * @param command
-     * @return
-     */
-    private boolean rootCommand(String command) {
-        Process process = null;
-        DataOutputStream os = null;
-
-        try {
-            process = Runtime.getRuntime().exec("su");
-            os = new DataOutputStream(process.getOutputStream());
-            os.writeBytes(command + "\n");
-            os.writeBytes("exit\n");
-            os.flush();
-/*            int i = process.waitFor();
-            if ((i != 0) || (!file.canRead()) || (!file.canWrite())) {
-                return false;
-            }*/
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
-
-        } finally {
-            if (os != null) {
-                try {
-                    os.close();
-                    process.destroy();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-
-            }
-
-        }
-        return true;
-    }
-
-
     @Override
     protected void onDestroy() {
         super.onDestroy();
         unregisterReceiver(simStateReceive);
+        serialPortManager.close();
     }
 }

@@ -43,11 +43,19 @@ public class SerialPort {
 		if (!device.canRead() || !device.canWrite()) {
 			try {
 				/* Missing read/write permission, trying to chmod the file */
-				Process su;
+/*				Process su;
 				su = Runtime.getRuntime().exec("/system/bin/su");
 				String cmd = "chmod 666 " + device.getAbsolutePath() + "\n"
 						+ "exit\n";
 				su.getOutputStream().write(cmd.getBytes());
+				if ((su.waitFor() != 0) || !device.canRead()
+						|| !device.canWrite()) {
+					throw new SecurityException();
+				}*/
+
+				String cmd = "chmod 666 " + device.getAbsolutePath() + "\n"
+						+ "exit\n";
+				Process su = Runtime.getRuntime().exec(cmd);
 				if ((su.waitFor() != 0) || !device.canRead()
 						|| !device.canWrite()) {
 					throw new SecurityException();
