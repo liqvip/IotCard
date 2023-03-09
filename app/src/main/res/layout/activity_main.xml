@@ -8,6 +8,7 @@
     tools:context=".MainActivity">
 
     <EditText
+        android:visibility="gone"
         android:id="@+id/et_cmd"
         android:layout_width="match_parent"
         android:layout_height="40dp"
@@ -17,6 +18,7 @@
         android:maxLines="1"
         android:hint="请输入At指令"/>
     <Button
+        android:visibility="gone"
         android:id="@+id/bt_send"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -25,10 +27,25 @@
         app:layout_constraintRight_toRightOf="parent"
         android:text="发送"/>
     <TextView
+        android:visibility="gone"
         android:id="@+id/tv_res"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         app:layout_constraintTop_toBottomOf="@+id/bt_send"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"/>
+
+    <TextView
+        android:id="@+id/tv_level"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:gravity="center"/>
+    <Button
+        android:id="@+id/bt_start_boot_app"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:layout_constraintTop_toBottomOf="@+id/tv_level"
+        android:text="打开 boot app"/>
 </androidx.constraintlayout.widget.ConstraintLayout>

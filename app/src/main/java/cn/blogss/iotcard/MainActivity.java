@@ -1,12 +1,18 @@
 package cn.blogss.iotcard;
 
+import android.Manifest;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
+import android.location.GpsSatellite;
+import android.location.GpsStatus;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.location.LocationProvider;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -34,6 +40,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
+import java.util.Iterator;
 
 import android_serialport_api.SerialPortManager;
 
@@ -50,8 +57,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private SerialPortManager serialPortManager;
     private final SimStateReceive simStateReceive = new SimStateReceive();
     private EditText etCmd;
-    private Button btSend;
-    private TextView tvRes;
+    private Button btSend, btStartBootApp;
+    private TextView tvRes, tvLevel;
 
     private final PhoneStateListener phoneStateListener = new PhoneStateListener(){
         @Override
@@ -61,6 +68,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             Log.i(TAG, "dBm: "+ dBm);
             int level = getLevel(dBm);
             Log.i(TAG, "level: " + level);
+            tvLevel.setText(String.format("信号强度：%s", level));
         }
     };
 
@@ -82,9 +90,83 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private LocationListener locationListener = new LocationListener() {
+        // GPS 开启时触发
+        @Override
+        public void onProviderEnabled(@NonNull String provider) {
+            Log.i(TAG, "onProviderEnabled: ");
+        }
+
+        // GPS 禁用时触发
+        @Override
+        public void onProviderDisabled(@NonNull String provider) {
+            Log.i(TAG, "onProviderDisabled: ");
+        }
+
+        // GPS 状态变化时触发
+        @Override
+        public void onStatusChanged(String provider, int status, Bundle extras) {
+            switch (status) {
+                // GPS 状态为可见时
+                case LocationProvider.AVAILABLE:
+                    Log.i(TAG, "当前GPS状态为可见状态");
+                    break;
+                // GPS 状态为服务区外时
+                case LocationProvider.OUT_OF_SERVICE:
+                    Log.i(TAG, "当前GPS状态为服务区外状态");
+                    break;
+                // GPS 状态为暂停服务时
+                case LocationProvider.TEMPORARILY_UNAVAILABLE:
+                    Log.i(TAG, "当前GPS状态为暂停服务状态");
+                    break;
+            }
+        }
+
+        // 位置信息变化时触发
         @Override
         public void onLocationChanged(@NonNull Location location) {
             updateToNewLocation(location);
+        }
+    };
+
+    // GPS 状态变化监听
+    private GpsStatus.Listener gpsStatusListener = new GpsStatus.Listener() {
+        @Override
+        public void onGpsStatusChanged(int event) {
+            switch (event) {
+                // 第一次定位
+                case GpsStatus.GPS_EVENT_FIRST_FIX:
+                    Log.i(TAG, "onGpsStatusChanged: 第一次定位");
+                    break;
+                // 卫星状态改变
+                case GpsStatus.GPS_EVENT_SATELLITE_STATUS:
+                    // 获取当前状态
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                            Log.i(TAG, "onGpsStatusChanged: 定位权限未开启");
+                            return;
+                        }
+                    }
+                    GpsStatus gpsStatus = locationManager.getGpsStatus(null);
+                    // 获取卫星颗数的默认最大值
+                    int maxSatellites = gpsStatus.getMaxSatellites();
+                    // 创建一个迭代器保存所有卫星
+                    Iterator<GpsSatellite> iters = gpsStatus.getSatellites().iterator();
+                    int count = 0;
+                    while (iters.hasNext() && count <= maxSatellites) {
+                        GpsSatellite s = iters.next();
+                        count++;
+                    }
+                    System.out.println("搜索到：" + count + "颗卫星");
+                    break;
+                // 定位启动
+                case GpsStatus.GPS_EVENT_STARTED:
+                    Log.i(TAG, "onGpsStatusChanged: 定位启动");
+                    break;
+                // 定位结束
+                case GpsStatus.GPS_EVENT_STOPPED:
+                    Log.i(TAG, "onGpsStatusChanged: 定位结束");
+                    break;
+            }
         }
     };
 
@@ -94,11 +176,15 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         setContentView(R.layout.activity_main);
 
 //        getLocationByGps();
-//        getLocationByGpsContinuous();
+        getLocationByGpsContinuous();
         etCmd = findViewById(R.id.et_cmd);
         btSend = findViewById(R.id.bt_send);
         tvRes = findViewById(R.id.tv_res);
+        tvLevel = findViewById(R.id.tv_level);
+        btStartBootApp = findViewById(R.id.bt_start_boot_app);
+
         btSend.setOnClickListener(this);
+        btStartBootApp.setOnClickListener(this);
 
         serialPortManager = new SerialPortManager.Builder()
                 .path("/dev/ttyUSB1")
@@ -135,8 +221,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     public void getLocationByGps(){
         locationManager = (LocationManager)getSystemService(Context.LOCATION_SERVICE);
-        Location location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-//        Location location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+//        Location location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+        Location location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
         if(location != null){
             double altitude = location.getAltitude();
             double longitude = location.getLongitude();
@@ -148,8 +234,29 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     public void getLocationByGpsContinuous(){
         locationManager = (LocationManager)getSystemService(Context.LOCATION_SERVICE);
-        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 3000, 0, locationListener);
-//        locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 3000, 0, mLocationListener01);
+//        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 0, locationListener);
+        /**
+         * 参数
+         * @param minTimeMs 位置信息更新周期，单位毫秒
+         * @param minDistanceM 位置变化最小距离：当位置距离变化超过此值时，将更新位置信息
+         */
+        if(locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+            Log.i(TAG, "NETWORK_PROVIDER enabled");
+            locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 1000, 0, locationListener);
+            return;
+        } else {
+            Log.i(TAG, "NETWORK_PROVIDER not enabled");
+        }
+
+        if(locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            Log.i(TAG, "GPS_PROVIDER enabled");
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 0, locationListener);
+        } else {
+            Log.i(TAG, "GPS_PROVIDER not enabled");
+        }
+
+        locationManager.addGpsStatusListener(gpsStatusListener);
+
     }
 
     /**
@@ -200,6 +307,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         if(id == R.id.bt_send){
             String cmd = etCmd.getText().toString() + "\r";
             serialPortManager.sendString(cmd);
+        } else if(id == R.id.bt_start_boot_app) {
+            Intent intent = new Intent();
+            intent.setComponent(new ComponentName("cn.utcook.su","cn.utcook.su.utservice.ReInstallService"));
+            startService(intent);
         }
     }
 
