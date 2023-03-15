@@ -229,6 +229,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             mLocationOption.setLocationMode(AMapLocationClientOption.AMapLocationMode.Hight_Accuracy);
             //设置定位间隔,单位毫秒,默认为2000ms
             mLocationOption.setInterval(2000);
+            // 设置单次定位
+//            mLocationOption.setOnceLocation(true);
+            // 关闭定位缓存
+            mLocationOption.setLocationCacheEnable(false);
 
             //设置定位参数
             mlocationClient.setLocationOption(mLocationOption);
