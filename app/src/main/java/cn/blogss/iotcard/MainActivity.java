@@ -65,7 +65,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private final SimStateReceive simStateReceive = new SimStateReceive();
     private EditText etCmd;
     private Button btSend, btStartBootApp;
-    private TextView tvRes, tvLevel;
+    private TextView tvRes, tvLevel, tvIccid;
 
     //声明mlocationClient对象
     public AMapLocationClient mlocationClient;
@@ -193,6 +193,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         btSend = findViewById(R.id.bt_send);
         tvRes = findViewById(R.id.tv_res);
         tvLevel = findViewById(R.id.tv_level);
+        tvIccid = findViewById(R.id.tv_iccid);
         btStartBootApp = findViewById(R.id.bt_start_boot_app);
 
         btSend.setOnClickListener(this);
@@ -419,6 +420,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         // 获取iccid
                         String iccid = getIccid(telephonyManager);
                         Log.i(TAG, "iccid: " + iccid);
+                        tvIccid.setText(iccid);
                         // 连接串口
                         serialPortManager.open();
 
