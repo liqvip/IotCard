@@ -31,7 +31,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.IotCard">
-        <activity android:name=".MainActivity"
+        <activity android:name=".ICCIDActivity"
             android:launchMode="singleTask"
             android:exported="true">
             <intent-filter>
