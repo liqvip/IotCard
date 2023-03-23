@@ -1,26 +1,17 @@
 package cn.blogss.iotcard;
 
-import android.Manifest;
 import android.content.BroadcastReceiver;
-import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.pm.PackageManager;
 import android.database.Cursor;
-import android.location.GpsSatellite;
-import android.location.GpsStatus;
-import android.location.Location;
-import android.location.LocationListener;
-import android.location.LocationManager;
-import android.location.LocationProvider;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.telephony.PhoneStateListener;
-import android.telephony.SignalStrength;
-import android.telephony.TelephonyCallback;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.telephony.cdma.CdmaCellLocation;
 import android.telephony.gsm.GsmCellLocation;
@@ -28,25 +19,24 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.amap.api.location.AMapLocation;
 import com.amap.api.location.AMapLocationClient;
 import com.amap.api.location.AMapLocationClientOption;
-import com.amap.api.location.AMapLocationListener;
+import com.hjq.permissions.OnPermissionCallback;
+import com.hjq.permissions.Permission;
+import com.hjq.permissions.XXPermissions;
 
-import java.nio.charset.StandardCharsets;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Iterator;
-
-import android_serialport_api.SerialPortManager;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.List;
 
 /**
  * 待解决问题
@@ -58,7 +48,8 @@ public class ICCIDActivity extends AppCompatActivity implements View.OnClickList
     private static final String TAG = "ICCIDActivity";
     public static final String ACTION_SIM_STATE_CHANGED = "android.intent.action.SIM_STATE_CHANGED";
     private final SimStateReceive simStateReceive = new SimStateReceive();
-    private TextView tvLevel, tvIccid;
+    private TextView tvLevel, tvIccid, tvSimInfo;
+    private Button btSimInfo, btAt;
 
     //声明mlocationClient对象
     public AMapLocationClient mlocationClient;
@@ -101,7 +92,39 @@ public class ICCIDActivity extends AppCompatActivity implements View.OnClickList
         setContentView(R.layout.activity_iccid);
         tvLevel = findViewById(R.id.tv_level);
         tvIccid = findViewById(R.id.tv_iccid);
+        tvSimInfo = findViewById(R.id.tv_sim_info);
+        btSimInfo = findViewById(R.id.bt_sim_info);
+        btAt = findViewById(R.id.bt_at);
+
+        btSimInfo.setOnClickListener(this);
+        btAt.setOnClickListener(this);
+
+
         registerReceiver(simStateReceive, new IntentFilter(ACTION_SIM_STATE_CHANGED));
+
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            XXPermissions.with(this)
+                    // 申请多个权限
+                    .permission(Permission.READ_PHONE_STATE)
+                    .request(new OnPermissionCallback() {
+
+                        @Override
+                        public void onGranted(@NonNull List<String> permissions, boolean allGranted) {
+                            if (!allGranted) {
+                                return;
+                            }
+                        }
+
+                        @Override
+                        public void onDenied(@NonNull List<String> permissions, boolean doNotAskAgain) {
+                            if (doNotAskAgain) {
+                                XXPermissions.startPermissionActivity(ICCIDActivity.this, permissions);
+                            } else {
+                            }
+                        }
+                    });
+        }
+
     }
 
     /**
@@ -149,7 +172,19 @@ public class ICCIDActivity extends AppCompatActivity implements View.OnClickList
     @Override
     public void onClick(View v) {
         int id = v.getId();
+        if(id == R.id.bt_sim_info) {
+            try {
+                String res1 = getIccid2();
+                TelephonyManager telephonyManager = (TelephonyManager)getSystemService(Context.TELEPHONY_SERVICE);
+                String res2 = getIccid3(telephonyManager);
 
+                tvSimInfo.setText(res1 + res2);
+            } catch (Exception e) {
+                tvIccid.setText(e.getMessage());
+            }
+        } else if(id == R.id.bt_at) {
+            getSimInfoByAt();
+        }
     }
 
     /**
@@ -177,9 +212,8 @@ public class ICCIDActivity extends AppCompatActivity implements View.OnClickList
                         telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_SIGNAL_STRENGTH);
                         // 获取iccid
                         try {
-//                            String iccid = getIccid(telephonyManager);
-                            getInfo();
-//                            tvIccid.setText(iccid);
+                            //getIccid2();
+                            //getIccid3(telephonyManager);
                         } catch (Exception e) {
                             tvIccid.setText(e.getMessage());
                         }
@@ -213,6 +247,33 @@ public class ICCIDActivity extends AppCompatActivity implements View.OnClickList
         return TextUtils.isEmpty(telephonyManager.getSimSerialNumber()) ? iccid : telephonyManager.getSimSerialNumber();
     }
 
+    private String getIccid2(){
+        StringBuilder sb = new StringBuilder();
+        SubscriptionManager sm = SubscriptionManager.from(this);
+
+// it returns a list with a SubscriptionInfo instance for each simcard
+// there is other methods to retrieve SubscriptionInfos (see [2])
+        List<SubscriptionInfo> sis = sm.getActiveSubscriptionInfoList();
+
+// getting first SubscriptionInfo
+//        SubscriptionInfo si = sis.get(0);
+        Log.i(TAG, "getIccid2: size = " + sis.size());
+        for (SubscriptionInfo si: sis) {
+            sb.append(si.getIccId());
+            Log.i(TAG, "getIccid2: " + si.getIccId());
+            Log.i(TAG, "getIccid2: number =  " + si.getNumber());
+        }
+
+        return sb.toString();
+    }
+
+    private String getIccid3(TelephonyManager telephonyManager) {
+        String iccid = "N/A";
+        iccid = telephonyManager.getSimSerialNumber();
+        Log.i(TAG, "getIccid3: " + iccid);
+        return iccid;
+    }
+
     private void getInfo(){
         Uri uri = Uri.parse("content://telephony/siminfo");
         Cursor cursor = null;
@@ -237,6 +298,39 @@ public class ICCIDActivity extends AppCompatActivity implements View.OnClickList
             }
         }
 
+    }
+
+    public void getSimInfoByAt(){
+        String filePath = "/dev/ttyUSB1";
+        File file = new File(filePath);
+        BufferedWriter bufferedWriter = null;
+        BufferedReader bufferedReader = null;
+
+        try {
+            bufferedWriter = new BufferedWriter(new FileWriter(file));
+            bufferedReader = new BufferedReader(new FileReader(file));
+
+            String at = "at+iccid\\r";
+            bufferedWriter.write(at);
+
+            String res;
+            while ((res = bufferedReader.readLine()) != null) {
+                Log.i(TAG, "getSimInfoByAt: " + res);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if(bufferedReader != null) {
+                    bufferedReader.close();
+                }
+                if(bufferedWriter != null) {
+                    bufferedWriter.close();
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     @Override

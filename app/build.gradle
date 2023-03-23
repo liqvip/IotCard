@@ -73,4 +73,5 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
     // 高德定位
     implementation 'com.amap.api:location:latest.integration'
+    implementation 'com.github.getActivity:XXPermissions:16.8'
 }

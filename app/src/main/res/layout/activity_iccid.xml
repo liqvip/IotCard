@@ -20,4 +20,26 @@
         android:layout_height="wrap_content"
         app:layout_constraintTop_toBottomOf="@+id/tv_level"
         android:gravity="center"/>
+
+    <TextView
+        android:id="@+id/tv_sim_info"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:layout_constraintTop_toBottomOf="@+id/tv_iccid"
+        android:gravity="center"/>
+
+    <Button
+        android:id="@+id/bt_sim_info"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:layout_constraintTop_toBottomOf="@+id/tv_sim_info"
+        android:text="GET ICCID BY API"/>
+
+    <Button
+        android:id="@+id/bt_at"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:layout_constraintTop_toBottomOf="@+id/bt_sim_info"
+        android:text="GET ICCID BY AT"/>
+
 </androidx.constraintlayout.widget.ConstraintLayout>
